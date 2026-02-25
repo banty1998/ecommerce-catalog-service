@@ -1,0 +1,35 @@
+﻿version: '3.8'
+
+services:
+  # 1. The Database Container
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sql_server_catalog
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=SuperSecretPassw0rd! # SQL Server requires a strong password, or the container will crash immediately.
+    ports:
+      - "1433:1433" # Exposes port so you can connect via SSMS or Azure Data Studio
+    volumes:
+      - sqldata:/var/opt/mssql # Saves your data so it isn't lost when the container stops
+
+  # 2. Your .NET 10 API Container
+  api:
+    image: product-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: product_api_service
+    ports:
+      - "8080:8080" # Maps your localhost:8080 to the container's 8080
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      # THIS IS THE MAGIC: It overrides your appsettings.json connection string!
+      # Notice the Server=db (it uses the service name above, not localhost)
+      - ConnectionStrings__DefaultConnection=Server=db;Database=ProductDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+    depends_on:
+      - db
+
+# Creates a physical space on your hard drive to permanently store SQL data
+volumes:
+  sqldata:
