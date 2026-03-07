@@ -1,0 +1,64 @@
+﻿services:
+  # 1. The Shared Database Container
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sql_server_microservices
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=SuperSecretPassw0rd!
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+
+  # 2. The RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq_broker
+    ports:
+      - "5672:5672"   # Internal API communication port
+      - "15672:15672" # Web UI Dashboard port
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # 3. The Product Microservice
+  product-api:
+    build:
+      context: ./ProductAPI 
+      dockerfile: Dockerfile
+    container_name: product_api_service
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=db;Database=ProductDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+    depends_on:
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  # 4. The Order Microservice
+  order-api:
+    build:
+      context: ./OrderAPI 
+      dockerfile: Dockerfile
+    container_name: order_api_service
+    ports:
+      - "8081:8080" # Maps External 8081 to Internal 8080
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=db;Database=OrderDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+    depends_on:
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  sqldata:
