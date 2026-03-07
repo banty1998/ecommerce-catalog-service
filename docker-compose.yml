@@ -60,5 +60,20 @@
       rabbitmq:
         condition: service_healthy
 
+  # 5. The API Gateway (YARP) - The Single Front Door
+  api-gateway:
+    build:
+      context: ./ApiGateway 
+      dockerfile: Dockerfile
+    container_name: api_gateway_service
+    ports:
+      - "5000:8080" # External port 5000 routes to internal port 8080
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+    depends_on:
+      - product-api
+      - order-api
+
 volumes:
   sqldata:
