@@ -60,7 +60,24 @@
       rabbitmq:
         condition: service_healthy
 
-  # 5. The API Gateway (YARP) - The Single Front Door
+  # 5. The Auth Microservice
+  auth-api:
+    build:
+      context: ./AuthAPI 
+      dockerfile: Dockerfile
+    container_name: auth_api_service
+    ports:
+      - "8082:8080" # Maps External 8082 to Internal 8080
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Uses the exact same shared DB container logic as the others
+      - ConnectionStrings__DefaultConnection=Server=db;Database=Ecommerce_AuthDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+    depends_on:
+      db:
+        condition: service_started
+
+  # 6. The API Gateway (YARP) - The Single Front Door
   api-gateway:
     build:
       context: ./ApiGateway 
@@ -74,6 +91,7 @@
     depends_on:
       - product-api
       - order-api
+      - auth-api
 
 volumes:
   sqldata:

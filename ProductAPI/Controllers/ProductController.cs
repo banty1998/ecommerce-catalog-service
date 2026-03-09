@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ProductAPI.Interface;
 using ProductAPI.Models.Pagination;
@@ -37,12 +38,14 @@ namespace ProductAPI.Controllers
         }
         
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateProduct(CreateProductDTO dto)
         {
             var createdProduct = await _productService.CreateAsync(dto);
             return CreatedAtAction(nameof(GetById), new { id = createdProduct.Id }, createdProduct);
         }
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateProduct(int id, UpdateProductDTO dto)
         {
             try
@@ -57,6 +60,7 @@ namespace ProductAPI.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             try
