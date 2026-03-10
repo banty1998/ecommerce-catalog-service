@@ -24,7 +24,14 @@
       timeout: 5s
       retries: 10
 
-  # 3. The Product Microservice
+  # 3. The Redis Cache
+  redis:
+    image: redis:latest
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+
+  # 4. The Product Microservice
   product-api:
     build:
       context: ./ProductAPI 
@@ -36,13 +43,16 @@
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Server=db;Database=ProductDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+      - ConnectionStrings__RedisConnection=redis:6379
     depends_on:
       db:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_started
 
-  # 4. The Order Microservice
+  # 5. The Order Microservice
   order-api:
     build:
       context: ./OrderAPI 
@@ -60,7 +70,7 @@
       rabbitmq:
         condition: service_healthy
 
-  # 5. The Auth Microservice
+  # 6. The Auth Microservice
   auth-api:
     build:
       context: ./AuthAPI 
@@ -77,7 +87,7 @@
       db:
         condition: service_started
 
-  # 6. The API Gateway (YARP) - The Single Front Door
+  # 7. The API Gateway (YARP) - The Single Front Door
   api-gateway:
     build:
       context: ./ApiGateway 

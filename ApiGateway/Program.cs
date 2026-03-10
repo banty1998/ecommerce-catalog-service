@@ -1,8 +1,25 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// --- 1. CONFIGURE AGGRESSIVE RATE LIMITING ---
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("FixedPolicy", opt =>
+    {
+        opt.PermitLimit = 2; // ONLY 2 REQUESTS ALLOWED!
+        opt.Window = TimeSpan.FromSeconds(15); // PER 15 SECONDS!
+        opt.QueueLimit = 0;
+    });
+});
+// ---------------------------------------------
+
 // 1. Grab JWT settings
 var secretKey = builder.Configuration.GetValue<string>("JwtOptions:Secret");
 var issuer = builder.Configuration.GetValue<string>("JwtOptions:Issuer");
@@ -38,9 +55,8 @@ builder.Services.AddReverseProxy()
 
 var app = builder.Build();
 
-
-// 4. THESE MUST BE IN THIS EXACT ORDER
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication(); // Must be before Authorization
 app.UseAuthorization();  // Must be before MapReverseProxy
 

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Distributed;
 using Moq;
 using ProductAPI.Controllers;
 using ProductAPI.Interface;
@@ -11,12 +12,16 @@ namespace ProductAPI.Tests.Controllers
     public class ProductControllerTests
     {
         private readonly Mock<IProductServices> _mockService;
+        private readonly Mock<IDistributedCache> _mockCache; // 1. Add the cache mock field
         private readonly ProductController _controller;
 
         public ProductControllerTests()
         {
             _mockService = new Mock<IProductServices>();
-            _controller = new ProductController(_mockService.Object);
+            _mockCache = new Mock<IDistributedCache>(); // 2. Instantiate the mock
+
+            // 3. Inject BOTH mocks into the controller
+            _controller = new ProductController(_mockService.Object, _mockCache.Object);
         }
 
         #region GetById Tests
