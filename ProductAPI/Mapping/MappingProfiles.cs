@@ -9,7 +9,7 @@ namespace ProductAPI.Mapping
         public MappingProfiles() 
         {
             CreateMap<CreateProductDTO, Product>();
-            CreateMap<UpdateProductDTO, Product>();
+            CreateMap<UpdateProductDTO, Product>().ForMember(dest => dest.Id, opt => opt.Ignore()); ;
         }
     }
 }

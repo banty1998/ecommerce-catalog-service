@@ -6,6 +6,18 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ---CONFIGURE CORS FOR ANGULAR ---
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngularApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200") // Trust your local Angular dev server
+              .AllowAnyHeader()                     // Allow Authorization tokens
+              .AllowAnyMethod();                    // Allow GET, POST, PUT, DELETE
+    });
+});
+// -------------------------------------
+
 // --- 1. CONFIGURE AGGRESSIVE RATE LIMITING ---
 builder.Services.AddRateLimiter(options =>
 {
@@ -13,7 +25,7 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddFixedWindowLimiter("FixedPolicy", opt =>
     {
-        opt.PermitLimit = 2; // ONLY 2 REQUESTS ALLOWED!
+        opt.PermitLimit = 20; // ONLY 2 REQUESTS ALLOWED!
         opt.Window = TimeSpan.FromSeconds(15); // PER 15 SECONDS!
         opt.QueueLimit = 0;
     });
@@ -56,6 +68,7 @@ builder.Services.AddReverseProxy()
 var app = builder.Build();
 
 app.UseRouting();
+app.UseCors("AllowAngularApp");
 app.UseRateLimiter();
 app.UseAuthentication(); // Must be before Authorization
 app.UseAuthorization();  // Must be before MapReverseProxy

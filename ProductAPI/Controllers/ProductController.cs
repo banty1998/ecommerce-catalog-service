@@ -82,6 +82,13 @@ namespace ProductAPI.Controllers
         public async Task<IActionResult> CreateProduct(CreateProductDTO dto)
         {
             var createdProduct = await _productService.CreateAsync(dto);
+
+            // CACHE INVALIDATION: Wipe the cache for the first 10 pages!
+            for (int i = 1; i <= 10; i++)
+            {
+                await _cache.RemoveAsync($"products_page_{i}_size_10");
+            }
+
             return CreatedAtAction(nameof(GetById), new { id = createdProduct.Id }, createdProduct);
         }
 
@@ -93,8 +100,14 @@ namespace ProductAPI.Controllers
             {
                 await _productService.UpdateAsync(id, dto);
 
-                // CACHE INVALIDATION: Remove the stale product from Redis
+                // CACHE INVALIDATION: Remove the single item
                 await _cache.RemoveAsync($"product_{id}");
+
+                // CACHE INVALIDATION: Wipe the grid cache for the first 10 pages!
+                for (int i = 1; i <= 10; i++)
+                {
+                    await _cache.RemoveAsync($"products_page_{i}_size_10");
+                }
 
                 return NoContent();
             }
@@ -112,8 +125,14 @@ namespace ProductAPI.Controllers
             {
                 await _productService.DeleteAsync(id);
 
-                // CACHE INVALIDATION: Remove the deleted product from Redis
+                // CACHE INVALIDATION: Remove the single item
                 await _cache.RemoveAsync($"product_{id}");
+
+                // CACHE INVALIDATION: Wipe the grid cache for the first 10 pages!
+                for (int i = 1; i <= 10; i++)
+                {
+                    await _cache.RemoveAsync($"products_page_{i}_size_10");
+                }
 
                 return NoContent();
             }
