@@ -22,7 +22,8 @@ namespace OrderAPI.Services
             AppDbContext context,
             IMapper mapper,
             IProductApiClient productClient,
-            ILogger<OrderService> logger, IPublishEndpoint publishEndpoint)
+            ILogger<OrderService> logger,
+            IPublishEndpoint publishEndpoint)
         {
             _context = context;
             _mapper = mapper;
@@ -31,45 +32,52 @@ namespace OrderAPI.Services
             _publishEndpoint = publishEndpoint;
         }
 
-        public async Task<OrderResponseDto> PlaceOrderAsync(OrderCreateDto orderDto)
+        public async Task<OrderResponseDto> PlaceOrderAsync(OrderCreateDto orderDto, string userId)
         {
-            _logger.LogInformation("Attempting to place order for ProductId: {ProductId} with Quantity: {Quantity}", orderDto.ProductId, orderDto.Quantity);
+            _logger.LogInformation("Attempting to place order for UserId: {UserId} with {Count} items", userId, orderDto.Items.Count);
 
-            // 1. Fetch product details from ProductAPI
-            var product = await _productClient.GetProductByIdAsync(orderDto.ProductId);
-
-            // 2. Validate product existence and stock
-            if (product == null)
+            // 1. All-or-Nothing Validation Loop
+            foreach (var item in orderDto.Items)
             {
-                _logger.LogWarning("Order failed. ProductId {ProductId} was not found in the Catalog.", orderDto.ProductId);
-                throw new Exception($"Product with ID {orderDto.ProductId} does not exist.");
+                var product = await _productClient.GetProductByIdAsync(item.ProductId);
+
+                if (product == null)
+                {
+                    _logger.LogWarning("Order failed. ProductId {ProductId} was not found.", item.ProductId);
+                    throw new Exception($"Product with ID {item.ProductId} does not exist.");
+                }
+
+                if (product.StockQuantity < item.Quantity)
+                {
+                    _logger.LogWarning("Order failed. Insufficient stock for ProductId {ProductId}. Requested: {RequestedQuantity}, Available: {AvailableQuantity}",
+                        item.ProductId, item.Quantity, product.StockQuantity);
+                    throw new Exception($"Insufficient stock available for Product ID {item.ProductId}.");
+                }
             }
 
-            if (product.StockQuantity < orderDto.Quantity)
-            {
-                _logger.LogWarning("Order failed. Insufficient stock for ProductId {ProductId}. Requested: {RequestedQuantity}, Available: {AvailableQuantity}",
-                    orderDto.ProductId, orderDto.Quantity, product.StockQuantity);
-                throw new Exception($"Insufficient stock available for Product ID {orderDto.ProductId}.");
-            }
-
-            // 3. Map and save the order
+            // 2. Map and save the order
             var order = _mapper.Map<Order>(orderDto);
+            order.UserId = userId; // Attach to the user!
             order.OrderDate = DateTime.UtcNow;
 
             try
             {
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation("Successfully placed OrderId: {OrderId} for ProductId: {ProductId}", order.Id, order.ProductId);
+                _logger.LogInformation("Successfully placed OrderId: {OrderId} for UserId: {UserId}", order.Id, userId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An error occurred while saving the order for ProductId: {ProductId} to the database.", orderDto.ProductId);
+                _logger.LogError(ex, "An error occurred while saving the order to the database.");
                 throw;
             }
 
-            await _publishEndpoint.Publish(new OrderPlacedEvent(order.ProductId, order.Quantity));
-            _logger.LogInformation("Published OrderPlacedEvent to RabbitMQ for ProductId: {ProductId}", order.ProductId);
+            // 3. Publish an inventory deduction event for EVERY item in the cart
+            foreach (var item in order.Items)
+            {
+                await _publishEndpoint.Publish(new OrderPlacedEvent(item.ProductId, item.Quantity));
+                _logger.LogInformation("Published OrderPlacedEvent for ProductId: {ProductId}", item.ProductId);
+            }
 
             return _mapper.Map<OrderResponseDto>(order);
         }
@@ -77,7 +85,10 @@ namespace OrderAPI.Services
         public async Task<OrderResponseDto?> GetOrderByIdAsync(int id)
         {
             _logger.LogInformation("Retrieving order with ID: {OrderId}", id);
-            var order = await _context.Orders.FindAsync(id);
+
+            var order = await _context.Orders
+                                      .Include(o => o.Items) // Ensure Items are loaded
+                                      .FirstOrDefaultAsync(o => o.Id == id);
 
             if (order == null)
             {
@@ -90,9 +101,24 @@ namespace OrderAPI.Services
 
         public async Task<IEnumerable<OrderResponseDto>> GetAllOrdersAsync()
         {
-            _logger.LogInformation("Retrieving all orders from the database.");
-            var orders = await _context.Orders.ToListAsync();
-            _logger.LogInformation("Successfully retrieved {OrderCount} orders.", orders.Count);
+            _logger.LogInformation("Retrieving all orders.");
+
+            var orders = await _context.Orders
+                                       .Include(o => o.Items) // Ensure Items are loaded
+                                       .ToListAsync();
+
+            return _mapper.Map<IEnumerable<OrderResponseDto>>(orders);
+        }
+
+        public async Task<IEnumerable<OrderResponseDto>> GetOrdersByUserIdAsync(string userId)
+        {
+            _logger.LogInformation("Retrieving orders for UserId: {UserId}", userId);
+
+            var orders = await _context.Orders
+                                       .Include(o => o.Items) // Ensure Items are loaded
+                                       .Where(o => o.UserId == userId)
+                                       .OrderByDescending(o => o.OrderDate)
+                                       .ToListAsync();
 
             return _mapper.Map<IEnumerable<OrderResponseDto>>(orders);
         }

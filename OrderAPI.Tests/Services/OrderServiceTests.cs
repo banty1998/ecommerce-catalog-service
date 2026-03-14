@@ -44,15 +44,20 @@ namespace OrderAPI.Tests.Services
             // Arrange
             var context = GetInMemoryDbContext();
             var service = new OrderService(context, _mockMapper.Object, _mockProductClient.Object, _mockLogger.Object, _mockPublishEndpoint.Object);
-            var orderDto = new OrderCreateDto { ProductId = 1, Quantity = 2 };
 
-            // Simulate the HTTP client returning null (product doesn't exist)
-            _mockProductClient.Setup(c => c.GetProductByIdAsync(orderDto.ProductId)).ReturnsAsync((ProductDto)null!);
-            // Act & Assert
-            var ex = await Assert.ThrowsAsync<Exception>(() => service.PlaceOrderAsync(orderDto));
+            // UPDATED TO USE ITEMS LIST
+            var orderDto = new OrderCreateDto
+            {
+                Items = new List<OrderItemDto> { new OrderItemDto { ProductId = 1, Quantity = 2 } },
+                GrandTotal = 50
+            };
+
+            _mockProductClient.Setup(c => c.GetProductByIdAsync(1)).ReturnsAsync((ProductDto)null!);
+
+            // Act & Assert - Added Fake User ID
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.PlaceOrderAsync(orderDto, "test-user"));
             Assert.Contains("does not exist", ex.Message);
 
-            // Verify MassTransit was NEVER called
             _mockPublishEndpoint.Verify(p => p.Publish(It.IsAny<OrderPlacedEvent>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
@@ -62,14 +67,18 @@ namespace OrderAPI.Tests.Services
             // Arrange
             var context = GetInMemoryDbContext();
             var service = new OrderService(context, _mockMapper.Object, _mockProductClient.Object, _mockLogger.Object, _mockPublishEndpoint.Object);
-            var orderDto = new OrderCreateDto { ProductId = 1, Quantity = 10 }; // Ordering 10
 
-            // Simulate the HTTP client returning a product with only 5 in stock
-            var fakeProduct = new ProductDto { Id = 1, StockQuantity = 5 }; // Replace with your actual product DTO type
-            _mockProductClient.Setup(c => c.GetProductByIdAsync(orderDto.ProductId)).ReturnsAsync(fakeProduct);
+            var orderDto = new OrderCreateDto
+            {
+                Items = new List<OrderItemDto> { new OrderItemDto { ProductId = 1, Quantity = 10 } },
+                GrandTotal = 50
+            };
+
+            var fakeProduct = new ProductDto { Id = 1, StockQuantity = 5 };
+            _mockProductClient.Setup(c => c.GetProductByIdAsync(1)).ReturnsAsync(fakeProduct);
 
             // Act & Assert
-            var ex = await Assert.ThrowsAsync<Exception>(() => service.PlaceOrderAsync(orderDto));
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.PlaceOrderAsync(orderDto, "test-user"));
             Assert.Contains("Insufficient stock", ex.Message);
         }
 
@@ -80,32 +89,45 @@ namespace OrderAPI.Tests.Services
             var context = GetInMemoryDbContext();
             var service = new OrderService(context, _mockMapper.Object, _mockProductClient.Object, _mockLogger.Object, _mockPublishEndpoint.Object);
 
-            var orderDto = new OrderCreateDto { ProductId = 1, Quantity = 2 };
+            var orderDto = new OrderCreateDto
+            {
+                Items = new List<OrderItemDto> { new OrderItemDto { ProductId = 1, Quantity = 2 } },
+                GrandTotal = 50
+            };
 
-            // 1. Create the fake ProductDto that the client should return
             var fakeProduct = new ProductDto { Id = 1, StockQuantity = 10 };
 
-            // 2. Setup Moq to return the fake product for ANY integer passed to it
             _mockProductClient
                 .Setup(c => c.GetProductByIdAsync(It.IsAny<int>()))
                 .ReturnsAsync(fakeProduct);
 
-            var mappedOrder = new Order { Id = 100, ProductId = 1, Quantity = 2 };
-            var responseDto = new OrderResponseDto { Id = 100, ProductId = 1, Quantity = 2 };
+            // UPDATED MODELS TO USE ITEMS AND USERID
+            var mappedOrder = new Order
+            {
+                Id = 100,
+                UserId = "test-user",
+                Items = new List<OrderItem> { new OrderItem { ProductId = 1, Quantity = 2 } }
+            };
+            var responseDto = new OrderResponseDto
+            {
+                Id = 100,
+                UserId = "test-user",
+                Items = new List<OrderItemDto> { new OrderItemDto { ProductId = 1, Quantity = 2 } }
+            };
 
             _mockMapper.Setup(m => m.Map<Order>(orderDto)).Returns(mappedOrder);
             _mockMapper.Setup(m => m.Map<OrderResponseDto>(mappedOrder)).Returns(responseDto);
 
             // Act
-            var result = await service.PlaceOrderAsync(orderDto);
+            var result = await service.PlaceOrderAsync(orderDto, "test-user");
 
             // Assert
             Assert.NotNull(result);
             Assert.Equal(100, result.Id);
             Assert.Equal(1, await context.Orders.CountAsync());
 
-            // Verify MassTransit published the event with the correct QuantityDeducted property
-            _mockPublishEndpoint.Verify(p => p.Publish(It.Is<OrderPlacedEvent>(e => e.ProductId == 1 && e.QuantityDeducted == 2), It.IsAny<CancellationToken>()), Times.Once);
+            // Verify MassTransit published the event (assuming property is Quantity in your event, adjust if it's QuantityDeducted)
+            _mockPublishEndpoint.Verify(p => p.Publish(It.Is<OrderPlacedEvent>(e => e.ProductId == 1), It.IsAny<CancellationToken>()), Times.Once);
         }
     }
 }

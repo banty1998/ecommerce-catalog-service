@@ -3,13 +3,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace OrderAPI.DTOs
 {
-    public class OrderCreateDto
+    public class OrderItemDto
     {
-        [Required]
-        public List<OrderItemDto> Items { get; set; } = new List<OrderItemDto>();
+        public int ProductId { get; set; }
+        public int Quantity { get; set; }
 
         [Required]
         [Column(TypeName = "decimal(18,2)")]
-        public decimal GrandTotal { get; set; }
+        public decimal TotalPrice { get; set; }
     }
 }

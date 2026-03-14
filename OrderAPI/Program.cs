@@ -1,5 +1,7 @@
 using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using OrderAPI.Data;
 using OrderAPI.Handler;
 using OrderAPI.HttpClients;
@@ -7,6 +9,7 @@ using OrderAPI.Services;
 using OrderAPI.Services.IServices;
 using Polly;
 using Polly.Extensions.Http;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +47,35 @@ builder.Services.AddMassTransit(x =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// --- NEW: JWT AUTHENTICATION ---
+var secretKey = builder.Configuration.GetValue<string>("JwtOptions:Secret");
+var issuer = builder.Configuration.GetValue<string>("JwtOptions:Issuer");
+var audience = builder.Configuration.GetValue<string>("JwtOptions:Audience");
+var key = Encoding.ASCII.GetBytes(secretKey!);
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = true,
+        ValidIssuer = issuer,
+        ValidateAudience = true,
+        ValidAudience = audience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+builder.Services.AddAuthorization();
+// -------------------------------
+
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
@@ -61,6 +93,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseExceptionHandler();
 

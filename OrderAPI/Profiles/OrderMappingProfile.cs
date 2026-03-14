@@ -8,9 +8,13 @@ namespace OrderAPI.Profiles
     {
         public OrderMappingProfile()
         {
-            // Source -> Destination
+            // Main Order mapping
             CreateMap<OrderCreateDto, Order>();
             CreateMap<Order, OrderResponseDto>();
+
+            // Nested Items mapping
+            CreateMap<OrderItemDto, OrderItem>();
+            CreateMap<OrderItem, OrderItemDto>();
         }
     }
 }

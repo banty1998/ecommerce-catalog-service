@@ -64,6 +64,10 @@
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Server=db;Database=OrderDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+      # --- NEW: JWT SYNC ---
+      - JwtOptions__Secret=YourSuperSecretKeyThatIsAtLeast32BytesLongForEcommerceClone!
+      - JwtOptions__Issuer=ecommerce-auth-api
+      - JwtOptions__Audience=ecommerce-client
     depends_on:
       db:
         condition: service_started
@@ -81,8 +85,11 @@
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      # Uses the exact same shared DB container logic as the others
       - ConnectionStrings__DefaultConnection=Server=db;Database=Ecommerce_AuthDb;User Id=sa;Password=SuperSecretPassw0rd!;TrustServerCertificate=True;
+      # Recommended to sync JWT here as well if it generates tokens
+      - JwtOptions__Secret=YourSuperSecretKeyThatIsAtLeast32BytesLongForEcommerceClone!
+      - JwtOptions__Issuer=ecommerce-auth-api
+      - JwtOptions__Audience=ecommerce-client
     depends_on:
       db:
         condition: service_started
@@ -98,6 +105,10 @@
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
+      # Keep Gateway JWT in sync natively
+      - JwtOptions__Secret=YourSuperSecretKeyThatIsAtLeast32BytesLongForEcommerceClone!
+      - JwtOptions__Issuer=ecommerce-auth-api
+      - JwtOptions__Audience=ecommerce-client
     depends_on:
       - product-api
       - order-api
